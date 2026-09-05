@@ -1639,7 +1639,7 @@ class MatrixMindApp {
     }
 
     saveSettings() {
-        const ip = this.esp32IpInput.value.trim() || '192.168.137.15';
+        const ip = this.esp32IpInput.value.trim() || '192.168.137.241';
         this.esp32Ip = ip;
         this.autoSend = this.autoSendToggle.checked;
 
