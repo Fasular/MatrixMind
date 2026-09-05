@@ -108,7 +108,7 @@ class MatrixMindApp {
         this.lastPrediction = null;
         
         // Configuración y Memoria de Aprendizaje
-        this.esp32Ip = localStorage.getItem('matrixmind_esp32_ip') || '192.168.137.15';
+        this.esp32Ip = localStorage.getItem('matrixmind_esp32_ip') || '127.0.0.1';
         this.autoSend = localStorage.getItem('matrixmind_autosend') === 'true'; // Por defecto desactivado (sólo al presionar botón)
         
         // Cargar plantillas personalizadas como arrays múltiples (Multi-Template Learning) y sanear versiones incompatibles
