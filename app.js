@@ -319,7 +319,7 @@ class MatrixMindApp {
         });
         
         this.esp32IpInput.addEventListener('input', () => {
-            const ip = this.esp32IpInput.value.trim() || '192.168.1.100';
+            const ip = this.esp32IpInput.value.trim() || '192.168.0.193';
             this.endpointPreview.textContent = `http://${ip}/api/set-character`;
         });
         
@@ -1639,7 +1639,7 @@ class MatrixMindApp {
     }
 
     saveSettings() {
-        const ip = this.esp32IpInput.value.trim() || '192.168.1.100';
+        const ip = this.esp32IpInput.value.trim() || '192.168.0.193';
         this.esp32Ip = ip;
         this.autoSend = this.autoSendToggle.checked;
 
