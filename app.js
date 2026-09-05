@@ -97,6 +97,7 @@ class MatrixMindApp {
             'Z': [0x7E, 0x06, 0x0C, 0x18, 0x30, 0x60, 0x7E, 0x00],
             ' ': [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
             '-': [0x00, 0x00, 0x00, 0x7E, 0x00, 0x00, 0x00, 0x00],
+            '&': [0x38, 0x6C, 0x6C, 0x38, 0x6E, 0x66, 0x3B, 0x00],
             '.': [0x00, 0x00, 0x00, 0x00, 0x00, 0x18, 0x18, 0x00]
         };
         
@@ -107,7 +108,7 @@ class MatrixMindApp {
         this.lastPrediction = null;
         
         // Configuración y Memoria de Aprendizaje
-        this.esp32Ip = localStorage.getItem('matrixmind_esp32_ip') || '127.0.0.1';
+        this.esp32Ip = localStorage.getItem('matrixmind_esp32_ip') || '192.168.137.15';
         this.autoSend = localStorage.getItem('matrixmind_autosend') === 'true'; // Por defecto desactivado (sólo al presionar botón)
         
         // Cargar plantillas personalizadas como arrays múltiples (Multi-Template Learning) y sanear versiones incompatibles
