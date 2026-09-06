@@ -1663,7 +1663,7 @@ class MatrixMindApp {
             const res = await fetch(`http://${ip}/api/set-character`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ character: 'A' }),
+                body: JSON.stringify({ character: 'F' }),
                 signal: controller.signal
             });
             clearTimeout(id);
