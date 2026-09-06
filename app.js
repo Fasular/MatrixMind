@@ -1669,7 +1669,7 @@ class MatrixMindApp {
             clearTimeout(id);
 
             if (res.ok) {
-                alert(`✅ Conexión exitosa con el ESP32 en ${ip} y matriz LED probada con la letra 'A'.`);
+                alert(`✅ Conexión exitosa con el ESP32 en ${ip} y matriz LED probada con la letra 'F'.`);
                 this.updateConnectionBadge(true);
             } else {
                 alert(`⚠️ El ESP32 respondió con código HTTP ${res.status}.`);
