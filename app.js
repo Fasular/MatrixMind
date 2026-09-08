@@ -1659,17 +1659,17 @@ class MatrixMindApp {
             const controller = new AbortController();
             const id = setTimeout(() => controller.abort(), 3000);
             
-            // Enviamos un ping visual con la letra 'A' de prueba
+            // Enviamos un ping visual con la letra 'B' de prueba
             const res = await fetch(`http://${ip}/api/set-character`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ character: 'A' }),
+                body: JSON.stringify({ character: 'B' }),
                 signal: controller.signal
             });
             clearTimeout(id);
 
             if (res.ok) {
-                alert(`✅ Conexión exitosa con el ESP32 en ${ip} y matriz LED probada con la letra 'A'.`);
+                alert(`✅ Conexión exitosa con el ESP32 en ${ip} y matriz LED probada con la letra 'B'.`);
                 this.updateConnectionBadge(true);
             } else {
                 alert(`⚠️ El ESP32 respondió con código HTTP ${res.status}.`);
