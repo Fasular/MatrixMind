@@ -1663,13 +1663,13 @@ class MatrixMindApp {
             const res = await fetch(`http://${ip}/api/set-character`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ character: 'B' }),
+                body: JSON.stringify({ character: 'A' }),
                 signal: controller.signal
             });
             clearTimeout(id);
 
             if (res.ok) {
-                alert(`✅ Conexión exitosa con el ESP32 en ${ip} y matriz LED probada con la letra 'B'.`);
+                alert(`✅ Conexión exitosa con el ESP32 en ${ip} y matriz LED probada con la letra 'A'.`);
                 this.updateConnectionBadge(true);
             } else {
                 alert(`⚠️ El ESP32 respondió con código HTTP ${res.status}.`);
