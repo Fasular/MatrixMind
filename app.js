@@ -1182,7 +1182,7 @@ class MatrixMindApp {
      * Clasificación hiper-precisa: Similitud Coseno 7x7 + Rectitud Tallo + Cruces Línea Media + Esquinas + Barras
      */
     classifyCharacter(features) {
-        let bestChar = 'F';
+        let bestChar = 'J';
         let minDistance = Infinity;
         let secondMinDistance = Infinity;
 
