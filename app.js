@@ -126,6 +126,7 @@ class MatrixMindApp {
 
         // Configuración y Memoria de Aprendizaje
         this.esp32Ip = localStorage.getItem('matrixmind_esp32_ip') || '127.0.0.1';
+        this.isEsp32Connected = false;
         this.autoSend = localStorage.getItem('matrixmind_autosend') === 'true'; // Por defecto desactivado (sólo al presionar botón)
 
         // Cargar plantillas personalizadas como arrays múltiples (Multi-Template Learning) y sanear versiones incompatibles
@@ -196,10 +197,6 @@ class MatrixMindApp {
             }
             this.virtualDots.push(rowDots);
         }
-        // Animación inicial en matriz virtual
-        setTimeout(() => {
-            this.displayVirtualChar('A');
-        }, 400);
     }
 
     /**
@@ -389,13 +386,18 @@ class MatrixMindApp {
         const alarmDurationSelect = document.getElementById('alarmDurationSelect');
         if (alarmDurationSelect) {
             alarmDurationSelect.addEventListener('change', () => {
+                if (!this.isEsp32Connected) {
+                    alarmDurationSelect.value = String(this.domoticsConfig?.alarmOn?.duration || 3);
+                    this.showToast('Sin conexión al ESP32: Configura primero la dirección IP en Sistema & Red para usar Domótica & Alertas.', 'warning', '⚠️');
+                    return;
+                }
                 const val = parseInt(alarmDurationSelect.value, 10) || 3;
                 const badge = document.getElementById('durationBadgeText');
                 if (badge) badge.textContent = `${val} Segundos`;
                 // Guardar y sincronizar duración de inmediato en la configuración
                 this.domoticsConfig.alarmOn.duration = val;
                 localStorage.setItem('matrixmind_domotics_config', JSON.stringify(this.domoticsConfig));
-                this.showToast(`⏱️ Tiempo de alarma ajustado a ${val} segundos`);
+                this.showToast(`Tiempo de alarma ajustado a ${val} segundos`, 'info', '⏱️');
             });
         }
 
@@ -404,6 +406,9 @@ class MatrixMindApp {
             this.esp32IpInput.addEventListener('input', () => {
                 const ip = this.esp32IpInput.value.trim() || '192.168.1.100';
                 if (this.endpointPreview) this.endpointPreview.textContent = `http://${ip}/api/set-character`;
+                if (ip !== this.esp32Ip) {
+                    this.isEsp32Connected = false;
+                }
             });
         }
 
@@ -1287,9 +1292,11 @@ class MatrixMindApp {
             if (domAction) {
                 await this.executeDomoticsAction(domAction.actionKey, true);
             } else {
-                this.predictionChar.textContent = detectedChar;
-                this.predictionDetails.textContent = `Carácter detectado por IA`;
-                await this.sendToESP32(detectedChar);
+                const ok = await this.sendToESP32(detectedChar);
+                if (ok) {
+                    this.predictionChar.textContent = detectedChar;
+                    this.predictionDetails.textContent = `Carácter detectado por IA`;
+                }
             }
 
         } catch (err) {
@@ -1448,23 +1455,26 @@ class MatrixMindApp {
     async sendToESP32(character, extraPayload = {}) {
         this.lastSentPayload = { character, extraPayload };
 
-        // Iluminar al instante en la matriz LED virtual en pantalla
-        if (extraPayload.action && this.DOMOTICS_ICONS[extraPayload.action]) {
-            this.renderVirtualMatrixPattern(this.DOMOTICS_ICONS[extraPayload.action]);
-        } else if (character) {
-            this.displayVirtualChar(character);
-        }
-
         const url = `http://${this.esp32Ip}/api/set-character`;
         const payload = { character: character || '', ...extraPayload };
 
         let toastDesc = `Enviando '${character}'`;
-        if (extraPayload.action === 'lamp_on') toastDesc = '💡 Encendiendo Foco Real';
-        else if (extraPayload.action === 'lamp_off') toastDesc = '🌑 Apagando Foco Real';
-        else if (extraPayload.action === 'alarm_on') toastDesc = `🚨 Activando Sirena (${extraPayload.duration || 3}s)`;
-        else if (extraPayload.action === 'alarm_off') toastDesc = '🔕 Silenciando Sirena';
+        let toastEmoji = '🚀';
+        if (extraPayload.action === 'lamp_on') {
+            toastDesc = 'Encendiendo Foco Real';
+            toastEmoji = '💡';
+        } else if (extraPayload.action === 'lamp_off') {
+            toastDesc = 'Apagando Foco Real';
+            toastEmoji = '🌑';
+        } else if (extraPayload.action === 'alarm_on') {
+            toastDesc = `Activando Sirena (${extraPayload.duration || 3}s)`;
+            toastEmoji = '🚨';
+        } else if (extraPayload.action === 'alarm_off') {
+            toastDesc = 'Silenciando Sirena';
+            toastEmoji = '🔕';
+        }
 
-        this.showToast(`🚀 ${toastDesc} al ESP32 (${this.esp32Ip})...`);
+        this.showToast(`${toastDesc} al ESP32 (${this.esp32Ip})...`, 'info', toastEmoji);
 
         try {
             const controller = new AbortController();
@@ -1484,25 +1494,35 @@ class MatrixMindApp {
             if (response.ok) {
                 const data = await response.json().catch(() => ({ status: 'ok' }));
                 console.log('✅ Respuesta del ESP32:', data);
+                this.isEsp32Connected = true;
                 this.updateConnectionBadge(true);
-                if (extraPayload.action) {
-                    this.showToast(`✨ ¡Acción domótica ejecutada e icono iluminado en matriz LED!`);
+
+                // Iluminar en la matriz LED virtual solo cuando el ESP32 conectó con éxito
+                if (extraPayload.action && this.DOMOTICS_ICONS[extraPayload.action]) {
+                    this.renderVirtualMatrixPattern(this.DOMOTICS_ICONS[extraPayload.action]);
+                    this.showToast('¡Acción domótica ejecutada e icono iluminado en matriz LED!', 'success', '✨');
                 } else {
-                    this.showToast(`✨ ¡Carácter '${character}' iluminado en matriz LED!`);
+                    if (character) this.displayVirtualChar(character);
+                    this.showToast(`¡Carácter '${character}' iluminado en matriz LED!`, 'success', '✨');
                 }
+                return true;
             } else {
                 console.warn(`⚠️ ESP32 respondió con código ${response.status}`);
-                this.updateConnectionBadge(true, `HTTP ${response.status}`);
-                this.showToast(`⚠️ ESP32 respondió con error (${response.status})`);
+                this.isEsp32Connected = false;
+                this.updateConnectionBadge(false, `HTTP ${response.status}`);
+                this.showToast(`El ESP32 respondió con error (${response.status}). Verifica la configuración en Sistema & Red.`, 'warning', '⚠️');
+                return false;
             }
         } catch (err) {
             console.warn('⚠️ No se pudo contactar al ESP32 (¿estás en la misma red Wi-Fi?):', err.message);
+            this.isEsp32Connected = false;
             this.updateConnectionBadge(false);
             if (extraPayload.action) {
-                this.showToast(`📶 Modo Local/Simulado: Icono domótico iluminado en pantalla`);
+                this.showToast('Sin conexión al ESP32: Configura primero la dirección IP en Sistema & Red para usar Domótica & Alertas.', 'warning', '⚠️');
             } else {
-                this.showToast(`📶 Modo Local/Simulado: '${character}' iluminado en simulador de pantalla`);
+                this.showToast('Sin conexión al ESP32: Configura primero la dirección IP en Sistema & Red para usar Lienzo Táctil & IA.', 'warning', '⚠️');
             }
+            return false;
         }
     }
 
@@ -1519,15 +1539,12 @@ class MatrixMindApp {
 
         const speed = parseInt(this.phraseSpeedSelect ? this.phraseSpeedSelect.value : '65', 10);
 
-        // Iniciar al instante la animación de marquesina en la matriz LED virtual en pantalla
-        this.scrollVirtualPhrase(text, speed);
-
         const url = `http://${this.esp32Ip}/api/scroll-text`;
         const payload = { text: text, speed: speed };
 
         this.sendPhraseBtn.disabled = true;
         this.sendPhraseBtn.innerHTML = `<span>⏳</span> Enviando...`;
-        this.showToast(`📜 Transmitiendo frase "${text}" al ESP32 (${this.esp32Ip})...`);
+        this.showToast(`Transmitiendo frase "${text}" al ESP32 (${this.esp32Ip})...`, 'info', '📜');
 
         try {
             const controller = new AbortController();
@@ -1545,13 +1562,16 @@ class MatrixMindApp {
             if (response.ok) {
                 const data = await response.json().catch(() => ({ status: 'ok' }));
                 console.log('✅ Respuesta del ESP32 (scroll):', data);
+                this.isEsp32Connected = true;
                 this.updateConnectionBadge(true);
-                this.showToast(`✨ ¡Frase "${text}" desplazándose en la matriz LED!`);
+                this.scrollVirtualPhrase(text, speed);
+                this.showToast(`¡Frase "${text}" desplazándose en la matriz LED!`, 'success', '✨');
                 this.phraseInput.value = '';
             } else {
                 console.warn(`⚠️ ESP32 respondió con código ${response.status}`);
-                this.updateConnectionBadge(true, `HTTP ${response.status}`);
-                this.showToast(`⚠️ Error HTTP ${response.status} al enviar frase`);
+                this.isEsp32Connected = false;
+                this.updateConnectionBadge(false, `HTTP ${response.status}`);
+                this.showToast(`Error HTTP ${response.status} al enviar frase. Verifica la configuración en Sistema & Red.`, 'warning', '⚠️');
             }
         } catch (err) {
             console.warn('⚠️ No se pudo contactar al ESP32 en /api/scroll-text:', err.message);
@@ -1562,8 +1582,10 @@ class MatrixMindApp {
                     body: JSON.stringify({ character: text, speed: speed })
                 });
                 if (fbRes.ok) {
+                    this.isEsp32Connected = true;
                     this.updateConnectionBadge(true);
-                    this.showToast(`✨ ¡Frase "${text}" desplazándose en la matriz LED!`);
+                    this.scrollVirtualPhrase(text, speed);
+                    this.showToast(`¡Frase "${text}" desplazándose en la matriz LED!`, 'success', '✨');
                     this.phraseInput.value = '';
                     this.sendPhraseBtn.disabled = false;
                     this.sendPhraseBtn.innerHTML = `<span>🚀</span> Enviar Frase`;
@@ -1571,8 +1593,9 @@ class MatrixMindApp {
                 }
             } catch (e2) { }
 
+            this.isEsp32Connected = false;
             this.updateConnectionBadge(false);
-            this.showToast(`📶 Modo Local/Simulado: Frase "${text}" lista para marquesina (ESP32 sin conexión)`);
+            this.showToast('Sin conexión al ESP32: Configura primero la dirección IP en Sistema & Red para usar Lienzo Táctil & IA.', 'warning', '⚠️');
         } finally {
             this.sendPhraseBtn.disabled = false;
             this.sendPhraseBtn.innerHTML = `<span>🚀</span> Enviar Frase`;
@@ -1593,22 +1616,63 @@ class MatrixMindApp {
     }
 
     /**
-     * Gestión del Toast flotante
+     * Gestión del Toast flotante sin duplicación de emoticones
      */
-    showToast(msg) {
-        this.toastMessage.textContent = msg;
+    showToast(msg, type = 'info', icon = null) {
+        if (!this.toastNotification || !this.toastMessage) return;
+
+        let cleanMsg = (msg || '').trim();
+        const leadingEmojiMatch = cleanMsg.match(/^(\p{Extended_Pictographic}(?:\uFE0F|\u200D\p{Extended_Pictographic})*)\s*/u);
+        let resolvedIcon = icon;
+        if (leadingEmojiMatch) {
+            if (!resolvedIcon) resolvedIcon = leadingEmojiMatch[1];
+            cleanMsg = cleanMsg.slice(leadingEmojiMatch[0].length).trim();
+        }
+
+        if (!resolvedIcon) {
+            if (type === 'warning') resolvedIcon = '⚠️';
+            else if (type === 'error') resolvedIcon = '❌';
+            else if (type === 'success') resolvedIcon = '✨';
+            else resolvedIcon = '🚀';
+        }
+
+        let resolvedType = type;
+        if (resolvedType === 'info') {
+            if (resolvedIcon === '⚠️') resolvedType = 'warning';
+            else if (resolvedIcon === '❌') resolvedType = 'error';
+            else if (resolvedIcon === '✨' || resolvedIcon === '✅') resolvedType = 'success';
+        }
+
+        this.toastNotification.classList.remove('toast-warning', 'toast-error', 'toast-success');
+        if (resolvedType === 'warning') {
+            this.toastNotification.classList.add('toast-warning');
+        } else if (resolvedType === 'error') {
+            this.toastNotification.classList.add('toast-error');
+        } else if (resolvedType === 'success') {
+            this.toastNotification.classList.add('toast-success');
+        }
+
+        if (this.toastIcon) {
+            this.toastIcon.textContent = resolvedIcon;
+        }
+        this.toastMessage.textContent = cleanMsg;
         this.toastNotification.classList.add('show');
 
         if (this.toastTimer) clearTimeout(this.toastTimer);
         this.toastTimer = setTimeout(() => {
             this.toastNotification.classList.remove('show');
-        }, 3500);
+        }, 4000);
     }
 
     /**
      * Aprendizaje instantáneo multiescala en dispositivo (Fine-Tuning multi-muestra por usuario)
      */
     trainOnDevice() {
+        if (!this.isEsp32Connected) {
+            this.showToast('Sin conexión al ESP32: Configura primero la dirección IP en Sistema & Red.', 'warning', '⚠️');
+            return;
+        }
+
         const correctChar = this.correctCharInput.value.trim().toUpperCase();
         if (!correctChar || !this.classes.includes(correctChar)) {
             alert('Por favor introduce una letra válida (A-Z) o un número (0-9).');
@@ -1799,16 +1863,47 @@ class MatrixMindApp {
         this.updateCustomTemplatesStatus();
     }
 
-    saveSettings() {
+    async saveSettings() {
         const ip = (this.esp32IpInput ? this.esp32IpInput.value.trim() : '') || '192.168.1.100';
-        this.esp32Ip = ip;
-        this.autoSend = this.autoSendToggle ? this.autoSendToggle.checked : false;
+        if (this.saveSettingsBtn) this.saveSettingsBtn.disabled = true;
 
-        localStorage.setItem('matrixmind_esp32_ip', this.esp32Ip);
-        localStorage.setItem('matrixmind_autosend', this.autoSend);
+        try {
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), 3000);
 
-        if (this.endpointPreview) this.endpointPreview.textContent = `http://${this.esp32Ip}/api/set-character`;
-        this.showToast(`⚙️ Configuración del ESP32 guardada: ${this.esp32Ip}`);
+            const res = await fetch(`http://${ip}/api/set-character`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ character: 'A' }),
+                signal: controller.signal
+            });
+            clearTimeout(id);
+
+            if (!res.ok) {
+                this.isEsp32Connected = false;
+                this.updateConnectionBadge(false, `HTTP ${res.status}`);
+                this.showToast(`El ESP32 respondió con error (${res.status}). Verifica la dirección IP antes de guardar.`, 'warning', '⚠️');
+                return;
+            }
+
+            this.isEsp32Connected = true;
+            this.esp32Ip = ip;
+            this.autoSend = this.autoSendToggle ? this.autoSendToggle.checked : false;
+
+            localStorage.setItem('matrixmind_esp32_ip', this.esp32Ip);
+            localStorage.setItem('matrixmind_autosend', this.autoSend);
+
+            if (this.endpointPreview) this.endpointPreview.textContent = `http://${this.esp32Ip}/api/set-character`;
+            this.updateConnectionBadge(true);
+            this.displayVirtualChar('A');
+            this.showToast(`Configuración del ESP32 guardada: ${this.esp32Ip}`, 'success', '💾');
+        } catch (err) {
+            this.isEsp32Connected = false;
+            this.updateConnectionBadge(false);
+            this.showToast(`Sin conexión al ESP32 (${ip}): Verifica que la dirección IP sea correcta y el ESP32 esté conectado antes de guardar.`, 'warning', '⚠️');
+        } finally {
+            if (this.saveSettingsBtn) this.saveSettingsBtn.disabled = false;
+        }
     }
 
     async testESP32Connection() {
@@ -1829,13 +1924,21 @@ class MatrixMindApp {
             clearTimeout(id);
 
             if (res.ok) {
-                alert(`✅ Conexión exitosa con el ESP32 en ${ip} y matriz LED probada con la letra 'A'.`);
+                this.isEsp32Connected = true;
+                this.esp32Ip = ip;
+                localStorage.setItem('matrixmind_esp32_ip', this.esp32Ip);
                 this.updateConnectionBadge(true);
+                this.displayVirtualChar('A');
+                this.showToast(`Conexión exitosa con el ESP32 en ${ip} y matriz LED probada con la letra 'A'.`, 'success', '✅');
             } else {
-                alert(`⚠️ El ESP32 respondió con código HTTP ${res.status}.`);
+                this.isEsp32Connected = false;
+                this.updateConnectionBadge(false, `HTTP ${res.status}`);
+                this.showToast(`El ESP32 respondió con código HTTP ${res.status}.`, 'warning', '⚠️');
             }
         } catch (err) {
-            alert(`⚠️ No se pudo conectar a http://${ip}/api/set-character. Verifica que el ESP32 esté encendido y conectado a tu red Wi-Fi.`);
+            this.isEsp32Connected = false;
+            this.updateConnectionBadge(false);
+            this.showToast(`No se pudo conectar. Verifica que el ESP32 esté encendido y conectado a tu red Wi-Fi.`, 'warning', '⚠️');
         } finally {
             if (this.testConnectionBtn) this.testConnectionBtn.textContent = 'Probar Conexión';
         }
@@ -1890,6 +1993,11 @@ class MatrixMindApp {
     }
 
     saveDomoticsConfig() {
+        if (!this.isEsp32Connected) {
+            this.showToast('Sin conexión al ESP32: Configura primero la dirección IP en Sistema & Red para guardar en Domótica & Alertas.', 'warning', '⚠️');
+            return;
+        }
+
         const duration = parseInt(document.getElementById('alarmDurationSelect')?.value || '3', 10);
         this.domoticsConfig = {
             alarmOn: { duration: duration }
@@ -1897,13 +2005,18 @@ class MatrixMindApp {
 
         localStorage.setItem('matrixmind_domotics_config', JSON.stringify(this.domoticsConfig));
         this.syncDomoticsUI();
-        this.showToast(`💾 ¡Configuración de Domótica guardada exitosamente!`);
+        this.showToast('¡Configuración de Domótica guardada exitosamente!', 'success', '💾');
     }
 
     /**
      * Enseñar a la IA el trazo actual dibujado en el lienzo para una acción domótica específica
      */
     async trainDomoticsAction(actionKey) {
+        if (!this.isEsp32Connected) {
+            this.showToast('Sin conexión al ESP32: Configura primero la dirección IP en Sistema & Red para usar Domótica & Alertas.', 'warning', '⚠️');
+            return;
+        }
+
         let targetKey = 'DOM_LAMP_ON';
         let actionLabel = 'Encender Foco';
         let iconEmoji = '💡';
@@ -1957,7 +2070,7 @@ class MatrixMindApp {
         const count = this.customTemplates[targetKey].length;
         this.syncDomoticsUI();
         this.updateCustomTemplatesStatus();
-        this.showToast(`🧠 ¡IA aprendió la muestra #${count} para ${iconEmoji} ${actionLabel}!`);
+        this.showToast(`¡IA aprendió la muestra #${count} para ${actionLabel}!`, 'success', '🧠');
     }
 
     /**
@@ -1991,34 +2104,48 @@ class MatrixMindApp {
         let actionPayload = {};
         let iconEmoji = '💡';
         let detailText = 'Foco Encendido';
+        const selEl = document.getElementById('alarmDurationSelect');
+        const dur = selEl ? (parseInt(selEl.value, 10) || 3) : (this.domoticsConfig?.alarmOn?.duration || 3);
 
         if (actionKey === 'lamp_on') {
             actionPayload = { action: 'lamp_on' };
             iconEmoji = '💡';
             detailText = 'Foco Encendido (Relé Conmutado)';
-            this.domoticsState.lamp = true;
-            this.updateDomoticsVisualState();
-            this.renderVirtualMatrixPattern(this.DOMOTICS_ICONS.lamp_on);
-            this.showToast(`💡 Foco Encendido`);
         } else if (actionKey === 'lamp_off') {
             actionPayload = { action: 'lamp_off' };
             iconEmoji = '🌑';
             detailText = 'Foco Apagado (Relé Abierto)';
-            this.domoticsState.lamp = false;
-            this.updateDomoticsVisualState();
-            this.renderVirtualMatrixPattern(this.DOMOTICS_ICONS.lamp_off);
-            this.showToast(`🌑 Foco Apagado`);
         } else if (actionKey === 'alarm_on') {
-            const selEl = document.getElementById('alarmDurationSelect');
-            const dur = selEl ? (parseInt(selEl.value, 10) || 3) : (this.domoticsConfig?.alarmOn?.duration || 3);
             if (!this.domoticsConfig.alarmOn) this.domoticsConfig.alarmOn = {};
             this.domoticsConfig.alarmOn.duration = dur;
             actionPayload = { action: 'alarm_on', duration: dur };
             iconEmoji = '🔔';
             detailText = `Sirena Activada (${dur} seg)`;
+        } else if (actionKey === 'alarm_off') {
+            actionPayload = { action: 'alarm_off' };
+            iconEmoji = '🔕';
+            detailText = 'Alarma Silenciada';
+        }
+
+        if (sendToServer) {
+            const connected = await this.sendToESP32('', actionPayload);
+            if (!connected) return;
+        }
+
+        if (actionKey === 'lamp_on') {
+            this.domoticsState.lamp = true;
+            this.updateDomoticsVisualState();
+            this.renderVirtualMatrixPattern(this.DOMOTICS_ICONS.lamp_on);
+            if (!sendToServer) this.showToast('Foco Encendido', 'info', '💡');
+        } else if (actionKey === 'lamp_off') {
+            this.domoticsState.lamp = false;
+            this.updateDomoticsVisualState();
+            this.renderVirtualMatrixPattern(this.DOMOTICS_ICONS.lamp_off);
+            if (!sendToServer) this.showToast('Foco Apagado', 'info', '🌑');
+        } else if (actionKey === 'alarm_on') {
             this.domoticsState.alarm = true;
             this.updateDomoticsVisualState();
-            this.showToast(`🚨 Alarma Activada (${dur} segundos de sirena)`);
+            if (!sendToServer) this.showToast(`Alarma Activada (${dur} segundos de sirena)`, 'info', '🚨');
 
             // Animación sincronizada de sirena pulsante cada 250ms
             if (this.alarmAnimInterval) clearInterval(this.alarmAnimInterval);
@@ -2040,9 +2167,6 @@ class MatrixMindApp {
                 this.updateDomoticsVisualState();
             }, dur * 1000);
         } else if (actionKey === 'alarm_off') {
-            actionPayload = { action: 'alarm_off' };
-            iconEmoji = '🔕';
-            detailText = 'Alarma Silenciada';
             this.domoticsState.alarm = false;
             if (this.alarmTimeout) clearTimeout(this.alarmTimeout);
             if (this.alarmAnimInterval) {
@@ -2051,17 +2175,13 @@ class MatrixMindApp {
             }
             this.renderVirtualMatrixPattern(this.DOMOTICS_ICONS.alarm_off);
             this.updateDomoticsVisualState();
-            this.showToast(`🔕 Alarma Silenciada`);
+            if (!sendToServer) this.showToast('Alarma Silenciada', 'info', '🔕');
         }
 
         this.predictionChar.textContent = iconEmoji;
         this.predictionDetails.textContent = detailText;
         this.confidenceBar.style.width = '100%';
         this.confidenceLabel.textContent = 'Acción Domótica Activada';
-
-        if (sendToServer) {
-            await this.sendToESP32('', actionPayload);
-        }
     }
 
     updateDomoticsVisualState() {
