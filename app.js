@@ -1894,7 +1894,7 @@ class MatrixMindApp {
         if (this.isUnconfiguredIp(ip)) {
             this.isEsp32Connected = false;
             this.updateConnectionBadge(false, 'ESP32 Sin Configurar');
-            alert('⚠️ Por favor ingresa primero una dirección IP local válida del ESP32 (ej: 192.168.1.100) antes de probar la conexión.');
+            alert('Por favor ingresa primero una dirección IP local válida del ESP32 antes de probar la conexión.');
             this.showToast('Ingresa primero la dirección IP del ESP32', 'warning');
             return;
         }
