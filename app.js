@@ -1675,7 +1675,7 @@ class MatrixMindApp {
         }
 
         if (!this.isEsp32Connected) {
-            this.showToast('Sin conexión al ESP32. Verifica la conexión de tu red WiFi.', 'warning', '⚠️');
+            this.showToast('Sin conexión al ESP32. Verifica la conexión de tu red Wi-Fi.', 'warning', '⚠️');
             return;
         }
 
@@ -1722,7 +1722,7 @@ class MatrixMindApp {
 
     clearAllCustomTemplates() {
         if (!this.isEsp32Connected) {
-            this.showToast('Sin conexión al ESP32. Comprueba la conexión de tu red WiFi antes de borrar las muestras.', 'warning', '⚠️');
+            this.showToast('Sin conexión al ESP32. Comprueba la conexión de tu red Wi-Fi antes de borrar las muestras.', 'warning', '⚠️');
             return;
         }
 
