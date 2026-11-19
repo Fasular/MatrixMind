@@ -1668,19 +1668,19 @@ class MatrixMindApp {
      * Aprendizaje instantáneo multiescala en dispositivo (Fine-Tuning multi-muestra por usuario)
      */
     trainOnDevice() {
-        if (!this.isEsp32Connected) {
-            this.showToast('Sin conexión al ESP32: Configura primero la dirección IP en Sistema & Red.', 'warning', '⚠️');
+        const correctChar = this.correctCharInput.value.trim().toUpperCase();
+        if (!correctChar || !this.classes.includes(correctChar)) {
+            this.showToast('Introduce primero una letra válida (A-Z) o un número (0-9) en la casilla.', 'warning', '⚠️');
             return;
         }
 
-        const correctChar = this.correctCharInput.value.trim().toUpperCase();
-        if (!correctChar || !this.classes.includes(correctChar)) {
-            alert('Por favor introduce una letra válida (A-Z) o un número (0-9).');
+        if (!this.isEsp32Connected) {
+            this.showToast('Sin conexión al ESP32. Verifica la conexión de tu red WiFi.', 'warning', '⚠️');
             return;
         }
 
         if (!this.lastPrediction || !this.lastPrediction.features) {
-            alert('Dibuja primero el carácter en el lienzo antes de enseñarle a la IA.');
+            this.showToast('Dibuja primero el carácter en el lienzo antes de enseñarle a la IA.', 'warning', '⚠️');
             return;
         }
 
@@ -1701,7 +1701,7 @@ class MatrixMindApp {
         this.confidenceLabel.textContent = `Coincidencia Exacta (Aprendido)`;
 
         this.correctCharInput.value = '';
-        this.showToast(`🧠 ¡IA aprendió la forma #${count} de dibujar la '${correctChar}' exitosamente!`);
+        this.showToast(`¡IA aprendió la forma #${count} de dibujar la '${correctChar}' exitosamente!`, 'success', '🧠');
         this.updateCustomTemplatesStatus();
         this.sendToESP32(correctChar);
     }
@@ -1721,11 +1721,16 @@ class MatrixMindApp {
     }
 
     clearAllCustomTemplates() {
+        if (!this.isEsp32Connected) {
+            this.showToast('Sin conexión al ESP32. Comprueba la conexión de tu red WiFi antes de borrar las muestras.', 'warning', '⚠️');
+            return;
+        }
+
         if (confirm('¿Estás seguro de que deseas borrar todas las formas personalizadas aprendidas por la IA?')) {
             this.customTemplates = {};
             localStorage.removeItem('matrixmind_custom_templates');
             this.updateCustomTemplatesStatus();
-            this.showToast('🧹 Todas las muestras personalizadas han sido borradas.');
+            this.showToast('Todas las muestras personalizadas han sido borradas.', 'info', '🧹');
         }
     }
 
@@ -1733,6 +1738,11 @@ class MatrixMindApp {
      * Exportar todas las plantillas personalizadas y configuración de domótica a un archivo JSON descargable
      */
     exportAIProfile() {
+        if (!this.isEsp32Connected) {
+            this.showToast('Sin conexión al ESP32: Configura y conecta primero la dirección IP antes de exportar el perfil.', 'warning', '⚠️');
+            return;
+        }
+
         const sampleCount = Object.values(this.customTemplates).reduce((sum, arr) => sum + (Array.isArray(arr) ? arr.length : 0), 0);
         
         const profileData = {
@@ -1757,13 +1767,19 @@ class MatrixMindApp {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
 
-        this.showToast(`📤 ¡Perfil IA con ${sampleCount} muestras y domótica exportado exitosamente!`);
+        this.showToast(`¡Perfil IA con ${sampleCount} muestras y domótica exportado exitosamente!`, 'success', '📤');
     }
 
     /**
      * Importar y fusionar archivo JSON de perfil de IA y domótica al almacenamiento local
      */
     async importAIProfile(event) {
+        if (!this.isEsp32Connected) {
+            event.target.value = '';
+            this.showToast('Sin conexión al ESP32: Configura y conecta primero la dirección IP antes de importar un perfil.', 'warning', '⚠️');
+            return;
+        }
+
         const file = event.target.files[0];
         if (!file) return;
 
